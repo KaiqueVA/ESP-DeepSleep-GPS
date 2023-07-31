@@ -1,36 +1,36 @@
 #include <U8x8lib.h>
 #include <TinyGPS++.h>
-#include <HardwareSerial.h>
 
 
 #define uS_TO_S_FACTOR 1000000
 #define TEMPO_DEBOUNCE 10
 
+#define PERIODO1 5000
 
 TinyGPSPlus gps;
 
 U8X8_SSD1306_128X64_NONAME_SW_I2C display(/* clock=*/ SCL, /* data=*/ SDA, /* reset=*/ U8X8_PIN_NONE);   // OLEDs without Reset of the Display
 
-HardwareSerial neogps(1);
 
 RTC_DATA_ATTR int bootCount = 0;
 unsigned long timestamp_ultimo_acionamento = 0;
+unsigned long tempoAnt = 0;
 
 void configureDisplay(){
   display.begin();
   display.setPowerSave(0);
   display.setFont(u8x8_font_torussansbold8_u);
-
-  display.drawString(0, 0, "BOOT NUMERO: ");
-  display.drawString(13, 0, String(bootCount).c_str());
-  
-
-
+  displayIncializacao();
+  delay(5000);
+  display.clearDisplay();
 }
 
 void countToSleep(int secondsToSleep, int secondsSleep){
+  display.clearDisplay();
+  display.drawString(0, 0, "ECONOMIZANDO");
+  display.drawString(0, 2, "BATERIA =)");
   display.drawString(0, 4, "DORMINDO EM:");
-  display.drawString(0, 6, "              ");
+  
   for(int i = secondsToSleep; i >= 0; i--){
     if(i < 10){
       display.drawString(0, 6, "0");
@@ -55,7 +55,7 @@ void countToSleep(int secondsToSleep, int secondsSleep){
 
 void setup() {
   Serial.begin(115200);
-  neogps.begin(9600, SERIAL_8N1,16,17);
+  Serial1.begin(9600, SERIAL_8N1, 16, 17);
   delay(1000);
   ++bootCount;
   pinMode(4, INPUT);
@@ -66,11 +66,19 @@ void setup() {
 }
 
 void loop() {
+  unsigned long tempoAtual = millis();
+  byte cont = 0;
+  if(tempoAtual - tempoAnt >= PERIODO1){
+    tempoAnt = tempoAtual;
+    cont++;
+    Serial.println(cont);
+  }
+  
   if(digitalRead(4)){
     countToSleep(10, 10);
   }
-  while (neogps.available() > 0)
-    if (gps.encode(Serial2.read()))
+  while (Serial1.available() > 0)
+    if (gps.encode(Serial1.read()))
       displayInfo();
 
   if (millis() > 5000 && gps.charsProcessed() < 10)
@@ -84,10 +92,14 @@ void displayInfo()
 {
   Serial.print(F("Location: ")); 
   if (gps.location.isValid())
-  {
+  { 
+    String latitude = "LAT:" + String(gps.location.lat(), 6);
+    String longitude = "LNG:" + String(gps.location.lng(), 6);
     Serial.print(gps.location.lat(), 6);
     Serial.print(F(","));
     Serial.print(gps.location.lng(), 6);
+    display.drawString(0, 2, String(latitude).c_str());
+    display.drawString(0, 4, String(longitude).c_str());
   }
   else
   {
@@ -96,12 +108,14 @@ void displayInfo()
 
   Serial.print(F("  Date/Time: "));
   if (gps.date.isValid())
-  {
+  { 
+    String data = String(gps.date.day()) + "/" + String(gps.date.month()) + "/" + String(gps.date.year());
     Serial.print(gps.date.month());
     Serial.print(F("/"));
     Serial.print(gps.date.day());
     Serial.print(F("/"));
     Serial.print(gps.date.year());
+    display.drawString(0, 6, String(data).c_str());
   }
   else
   {
@@ -129,5 +143,14 @@ void displayInfo()
   }
 
   Serial.println();
+}
+
+void displayIncializacao(){
+  display.clearDisplay();
+  display.drawString(0, 0, "BOOT: ");
+  display.drawString(5, 0, String(bootCount).c_str());
+  display.drawString(0, 2, "<--BOTAO ACORDAR");
+  display.drawString(0, 4, "BOTAO DORMIR--->");
+  display.drawString(0, 6, "                 ");
 }
 
